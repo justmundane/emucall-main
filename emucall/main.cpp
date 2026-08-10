@@ -44,7 +44,9 @@ auto main ( ) -> std::int32_t
 
 	caller->set_emulator ( &cpu );
 
-	caller->register_functions ( memory->game_assembly, memory->unity_player );
+	caller->register_functions ( );
+
+	caller->register_modules ( { memory->game_assembly, memory->unity_player } );
 
 	/* example: */
 	// caller->call<type>( base + rva );

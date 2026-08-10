@@ -2,6 +2,8 @@
 
 `emucall` calls functions inside another process without injecting into it. It is a from-scratch x86-64 interpreter: it reads the target's own instruction bytes over `ReadProcessMemory` and executes them in your address space against a virtual CPU, a fake stack and a synthetic thread environment. No module is loaded into the target, no thread is hijacked, and nothing is written to it.
 
+It works against any x86-64 Windows process — the development target happened to be an IL2CPP Unity game, but nothing in the emulator assumes one.
+
 ## How it works
 
 A call sets up a virtual context and runs the target's code until it returns:
@@ -32,10 +34,14 @@ auto cpu = emulator
 );
 
 caller->set_emulator ( &cpu );
-caller->register_functions ( memory->game_assembly, memory->unity_player );
+caller->register_functions ( );
+
+caller->register_modules ( { module_a, module_b } );
 
 const auto result = caller->call< std::uint64_t > ( base + rva, argument );
 ```
+
+`register_modules` takes as many module bases as you like and sizes each one from its own PE headers. Those ranges decide what gets interpreted: an address inside a registered module is executed instruction by instruction, and anything outside is treated as an external call and serviced by a hook. Register nothing and everything is interpreted, which is the right default when you only care about one self-contained function.
 
 The two callbacks decide where each access goes — the fake stack, the emulated heap, or the real process. `main.cpp` is a working skeleton of that wiring.
 
@@ -58,11 +64,13 @@ The decoder and instruction handlers cover the general-purpose integer set, cont
 | emulator core | 1,306 |
 | movement / flow / AVX | 1,221 |
 
-## Target-specific values
+## Targets
 
-There are none — no hardcoded addresses or build-specific RVAs anywhere in the library, so nothing goes stale when the target updates.
+Nothing here is tied to a particular game or engine. There are no hardcoded addresses or build-specific RVAs anywhere in the library, so nothing goes stale when a target updates, and modules are registered dynamically by base address — any executable, any number of them.
 
-`register_functions` takes the `GameAssembly.dll` and `UnityPlayer.dll` bases and registers those ranges plus the Win32 and heap hooks, which orients the external-call layer around IL2CPP Unity targets. Everything it needs is resolved from those two bases at runtime. The emulator core itself has no such dependency.
+The decoder, the emulator core and the call layer only care about x86-64 machine code and the Windows calling convention. `register_functions` installs the Win32 and heap hooks, which are what most native code actually needs from its environment.
+
+The one engine-flavoured piece is optional: `managed_string` arguments and `set_string_class` marshal IL2CPP strings, because that is what the development target used. Passing `ansi_string`, `wide_string` or plain integer and pointer arguments needs none of it. Supporting a different runtime's string or object layout means adding a marshaller next to those, not changing the emulator.
 
 ## Building
 

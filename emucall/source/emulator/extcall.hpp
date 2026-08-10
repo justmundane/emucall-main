@@ -103,7 +103,7 @@ public:
 	auto tls_override ( std::uint32_t index, std::uint64_t& out_value ) const -> bool;
 	auto set_tls_override ( std::uint32_t index, std::uint64_t value ) -> void;
 
-	auto register_functions ( std::uint64_t game_assembly, std::uint64_t unity_player ) -> void;
+	auto register_functions ( ) -> void;
 
 	static auto make_returning_hook ( std::uint64_t return_value = 0 ) -> hook_fn;
 
@@ -111,6 +111,9 @@ public:
 	auto unregister_hook ( std::uint64_t address ) -> void;
 	auto register_module ( std::uint64_t base, std::uint64_t size ) -> void;
 	auto register_module ( std::uint64_t base, const memory_handler& mem ) -> void;
+	auto register_module ( std::uint64_t base ) -> void;
+	auto register_modules ( const std::vector< std::uint64_t >& bases ) -> void;
+	auto clear_modules ( ) -> void;
 	auto is_known_address ( std::uint64_t address ) const -> bool;
 	auto handle_external_call ( std::uint64_t address, cpu_state& cpu, const memory_handler& mem ) -> bool;
 	auto auto_stubbed ( ) const -> std::vector< std::uint64_t >;
@@ -867,6 +870,33 @@ inline auto extcall::register_module ( std::uint64_t base, const memory_handler&
 	this->register_module ( base, static_cast< std::uint64_t > ( size ) );
 }
 
+inline auto extcall::register_module ( std::uint64_t base ) -> void
+{
+	auto* const emu = this->get_emulator ( );
+
+	if ( base == 0 || emu == nullptr )
+	{
+		return;
+	}
+
+	this->register_module ( base, emu->get_memory ( ) );
+}
+
+inline auto extcall::register_modules ( const std::vector< std::uint64_t >& bases ) -> void
+{
+	for ( const auto base : bases )
+	{
+		this->register_module ( base );
+	}
+}
+
+inline auto extcall::clear_modules ( ) -> void
+{
+	const std::lock_guard< std::mutex > lock ( this->m_hook_mutex );
+
+	this->m_known_modules.clear ( );
+}
+
 inline auto extcall::is_known_address_locked ( std::uint64_t address ) const -> bool
 {
 	for ( const auto& entry : this->m_known_modules )
@@ -990,11 +1020,9 @@ inline auto extcall::return_from_hook ( cpu_state& cpu, const memory_handler& me
 	return true;
 }
 
-inline auto extcall::register_functions ( std::uint64_t game_assembly, std::uint64_t unity_player ) -> void
+inline auto extcall::register_functions ( ) -> void
 {
-	auto* const emu = this->get_emulator ( );
-
-	if ( emu == nullptr )
+	if ( this->get_emulator ( ) == nullptr )
 	{
 		return;
 	}
@@ -1003,9 +1031,6 @@ inline auto extcall::register_functions ( std::uint64_t game_assembly, std::uint
 	{
 		return caller->handle_external_call ( address, cpu, mem );
 	};
-
-	this->register_module ( game_assembly, emu->get_memory ( ) );
-	this->register_module ( unity_player, emu->get_memory ( ) );
 
 	this->register_win32_hooks ( );
 	this->register_heap_hooks ( );
