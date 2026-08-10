@@ -60,9 +60,9 @@ The decoder and instruction handlers cover the general-purpose integer set, cont
 
 ## Target-specific values
 
-`extcall` carries one hardcoded RVA, `unity_log_handler`, used to intercept the engine's logging function so calls that log don't wander into it. **That value is specific to a single build** and needs re-deriving elsewhere; it is not needed for calls that never log.
+There are none — no hardcoded addresses or build-specific RVAs anywhere in the library, so nothing goes stale when the target updates.
 
-The `register_functions` entry point takes the `GameAssembly.dll` and `UnityPlayer.dll` bases, so the external-call handler is currently oriented around IL2CPP Unity targets. The emulator core itself has no such dependency.
+`register_functions` takes the `GameAssembly.dll` and `UnityPlayer.dll` bases and registers those ranges plus the Win32 and heap hooks, which orients the external-call layer around IL2CPP Unity targets. Everything it needs is resolved from those two bases at runtime. The emulator core itself has no such dependency.
 
 ## Building
 

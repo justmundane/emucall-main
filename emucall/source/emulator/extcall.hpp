@@ -68,7 +68,6 @@ public:
 	static constexpr std::uint32_t tls_slot_count = 64;
 	static constexpr std::uint32_t tls_slot_size = 0x40;
 	static constexpr std::uint32_t default_execute_limit = 10000;
-	static constexpr std::uint64_t unity_log_handler = 0x1365DB0;
 
 	extcall ( ) = default;
 	~extcall ( ) = default;
@@ -135,7 +134,6 @@ private:
 
 	auto register_win32_hooks ( ) -> void;
 	auto register_heap_hooks ( ) -> void;
-	auto register_unity_hooks ( std::uint64_t unity_player ) -> void;
 
 	static auto read_c_string ( const memory_handler& mem, std::uint64_t address, std::size_t limit ) -> std::string;
 	auto is_known_address_locked ( std::uint64_t address ) const -> bool;
@@ -1011,7 +1009,6 @@ inline auto extcall::register_functions ( std::uint64_t game_assembly, std::uint
 
 	this->register_win32_hooks ( );
 	this->register_heap_hooks ( );
-	this->register_unity_hooks ( unity_player );
 }
 
 inline auto extcall::read_c_string ( const memory_handler& mem, std::uint64_t address, std::size_t limit ) -> std::string
@@ -1041,49 +1038,6 @@ inline auto extcall::read_c_string ( const memory_handler& mem, std::uint64_t ad
 	}
 
 	return text;
-}
-
-inline auto extcall::register_unity_hooks ( std::uint64_t unity_player ) -> void
-{
-	if ( unity_player == 0 )
-	{
-		return;
-	}
-
-	caller->register_hook ( unity_player + extcall::unity_log_handler, [ ] ( cpu_state& cpu, const memory_handler& mem ) -> bool
-	{
-		const auto entry = cpu.read_gpr ( 1 );
-
-		std::uint64_t message = 0;
-		std::uint64_t condition = 0;
-		std::uint64_t file = 0;
-		std::uint32_t line = 0;
-		std::uint64_t flags = 0;
-
-		mem.read ( entry + 0x00, &message, 8 );
-		mem.read ( entry + 0x10, &condition, 8 );
-		mem.read ( entry + 0x20, &file, 8 );
-		mem.read ( entry + 0x28, &line, 4 );
-		mem.read ( entry + 0x30, &flags, 8 );
-
-		const auto message_text = extcall::read_c_string ( mem, message, 512 );
-		const auto condition_text = extcall::read_c_string ( mem, condition, 512 );
-		const auto file_text = extcall::read_c_string ( mem, file, 260 );
-
-		std::printf ( "[unity] %s\n", message_text.c_str ( ) );
-
-		if ( !condition_text.empty ( ) )
-		{
-			std::printf ( "[unity]   condition: %s\n", condition_text.c_str ( ) );
-		}
-
-		if ( !file_text.empty ( ) )
-		{
-			std::printf ( "[unity]   at %s:%u  flags=0x%llX\n", file_text.c_str ( ), line, flags );
-		}
-
-		return extcall::return_from_hook ( cpu, mem );
-	} );
 }
 
 inline auto extcall::register_win32_hooks ( ) -> void
